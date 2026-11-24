@@ -1,4 +1,4 @@
-package dev.pacto.wallet.entity;
+package dev.pacto.ledger;
 
 public enum LedgerAccountType {
     USER_AVAILABLE,

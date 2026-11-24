@@ -1,4 +1,4 @@
-package dev.pacto.wallet.entity;
+package dev.pacto.ledger;
 
 import jakarta.persistence.*;
 
@@ -18,9 +18,8 @@ public class LedgerAccount {
     @Column(name = "type", nullable = false, length = 32, updatable = false)
     private LedgerAccountType type;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "wallet_id", updatable = false)
-    private Wallet wallet;
+    @Column(name = "wallet_id", updatable = false)
+    private UUID walletId;
 
     @Column(name = "challenge_id", updatable = false)
     private UUID challengeId;
@@ -36,29 +35,28 @@ public class LedgerAccount {
 
     private LedgerAccount(
             LedgerAccountType type,
-            Wallet wallet,
-            UUID challengeId) {
+            UUID walletId) {
         this.type = Objects.requireNonNull(type);
-        this.wallet = wallet;
-        this.challengeId = challengeId;
+        this.walletId = walletId;
+        this.challengeId = null;
         this.balance = 0L;
         this.createdAt = Instant.now();
     }
 
-    public static LedgerAccount available(Wallet wallet) {
+    public static LedgerAccount available(UUID walletId) {
+
         Objects.requireNonNull(
-                wallet, "Available account requires a wallet");
+                walletId,
+                "Available account requires a wallet ID");
 
         return new LedgerAccount(
                 LedgerAccountType.USER_AVAILABLE,
-                wallet,
-                null);
+                walletId);
     }
 
     public static LedgerAccount systemIssuance() {
         return new LedgerAccount(
                 LedgerAccountType.SYSTEM_ISSUANCE,
-                null,
                 null);
     }
 
@@ -70,8 +68,8 @@ public class LedgerAccount {
         return type;
     }
 
-    public Wallet getWallet() {
-        return wallet;
+    public UUID getWalletId() {
+        return walletId;
     }
 
     public UUID getChallengeId() {
@@ -86,14 +84,16 @@ public class LedgerAccount {
         return createdAt;
     }
 
-    public void applyDelta(long delta) {
+    void applyDelta(long delta) {
 
         if (delta == 0L) {
             throw new IllegalArgumentException(
                     "Delta must not be zero");
         }
 
-        long newBalance = Math.addExact(this.balance, delta);
+        long newBalance = Math.addExact(
+                this.balance,
+                delta);
 
         if (this.type != LedgerAccountType.SYSTEM_ISSUANCE
                 && newBalance < 0L) {

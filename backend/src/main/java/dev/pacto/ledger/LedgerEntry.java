@@ -1,4 +1,4 @@
-package dev.pacto.wallet.entity;
+package dev.pacto.ledger;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.Immutable;
@@ -33,7 +33,7 @@ public class LedgerEntry {
     protected LedgerEntry() {
     }
 
-    public LedgerEntry(
+    LedgerEntry(
             LedgerTransaction transaction,
             LedgerAccount account,
             long delta) {

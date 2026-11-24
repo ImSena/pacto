@@ -1,9 +1,15 @@
 package dev.pacto.demo;
 
+import dev.pacto.ledger.repository.LedgerAccountRepository;
+import dev.pacto.ledger.repository.LedgerTransactionRepository;
 import dev.pacto.user.entity.User;
 import dev.pacto.user.repository.UserRepository;
-import dev.pacto.wallet.entity.*;
-import dev.pacto.wallet.repository.*;
+import dev.pacto.wallet.entity.Wallet;
+import dev.pacto.wallet.repository.WalletRepository;
+import dev.pacto.ledger.LedgerAccount;
+import dev.pacto.ledger.LedgerAccountType;
+import dev.pacto.ledger.LedgerPostingLine;
+import dev.pacto.ledger.LedgerService;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,7 +33,7 @@ public class DemoDataService {
     private final WalletRepository walletRepository;
     private final LedgerAccountRepository accountRepository;
     private final LedgerTransactionRepository transactionRepository;
-    private final LedgerEntryRepository entryRepository;
+    private final LedgerService ledgerService;
     private final JdbcTemplate jdbcTemplate;
 
     public DemoDataService(
@@ -35,13 +41,13 @@ public class DemoDataService {
             WalletRepository walletRepository,
             LedgerAccountRepository accountRepository,
             LedgerTransactionRepository transactionRepository,
-            LedgerEntryRepository entryRepository,
+            LedgerService ledgerService,
             JdbcTemplate jdbcTemplate) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
-        this.entryRepository = entryRepository;
+        this.ledgerService = ledgerService;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -68,7 +74,7 @@ public class DemoDataService {
 
         if (userRepository.findByDisplayName("Bruno").isPresent()
                 || userRepository.findByDisplayName("Lucas").isPresent()
-                || accountRepository.findByTypeAndWalletIsNull(
+                || accountRepository.findByTypeAndWalletIdIsNull(
                         LedgerAccountType.SYSTEM_ISSUANCE).isPresent()) {
 
             throw new IllegalStateException(
@@ -101,26 +107,16 @@ public class DemoDataService {
                 new Wallet(user));
 
         LedgerAccount availableAccount = accountRepository.save(
-                LedgerAccount.available(wallet));
+                LedgerAccount.available(wallet.getId()));
 
-        LedgerTransaction transaction = transactionRepository.save(
-                LedgerTransaction.initialGrant(
-                        businessOperationId));
-
-        issuanceAccount.applyDelta(-INITIAL_CREDITS);
-        availableAccount.applyDelta(INITIAL_CREDITS);
-
-        LedgerEntry debit = new LedgerEntry(
-                transaction,
-                issuanceAccount,
-                -INITIAL_CREDITS);
-
-        LedgerEntry credit = new LedgerEntry(
-                transaction,
-                availableAccount,
-                INITIAL_CREDITS);
-
-        entryRepository.saveAll(
-                List.of(debit, credit));
+        ledgerService.postInitialGrant(
+                businessOperationId,
+                List.of(
+                        new LedgerPostingLine(
+                                issuanceAccount.getId(),
+                                -INITIAL_CREDITS),
+                        new LedgerPostingLine(
+                                availableAccount.getId(),
+                                INITIAL_CREDITS)));
     }
 }

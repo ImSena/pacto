@@ -1,4 +1,4 @@
-package dev.pacto.wallet.entity;
+package dev.pacto.ledger;
 
 import jakarta.persistence.*;
 
@@ -46,7 +46,7 @@ public class LedgerTransaction {
         this.createdAt = Instant.now();
     }
 
-    public static LedgerTransaction initialGrant(
+    static LedgerTransaction initialGrant(
             UUID businessOperationId) {
         return new LedgerTransaction(
                 businessOperationId,
