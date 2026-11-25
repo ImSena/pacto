@@ -98,8 +98,10 @@ public class LedgerAccount {
         if (this.type != LedgerAccountType.SYSTEM_ISSUANCE
                 && newBalance < 0L) {
 
-            throw new IllegalStateException(
-                    "Insufficient balance");
+            throw new InsufficientBalanceException(
+                    this.id,
+                    this.balance,
+                    delta);
         }
 
         this.balance = newBalance;

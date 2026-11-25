@@ -58,4 +58,8 @@ public interface LedgerEntryRepository
 
                 Instant getCreatedAt();
         }
+
+        boolean existsByAccount_IdAndTransaction_Kind(
+                        UUID accountId,
+                        LedgerTransactionKind kind);
 }

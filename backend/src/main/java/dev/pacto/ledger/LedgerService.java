@@ -12,6 +12,8 @@ import java.util.*;
 
 @Service
 public class LedgerService {
+        public static final long INITIAL_GRANT_CREDITS = 100L;
+
         private final LedgerAccountRepository accountRepository;
         private final LedgerTransactionRepository transactionRepository;
         private final LedgerEntryRepository entryRepository;
@@ -36,6 +38,7 @@ public class LedgerService {
                 postings = List.copyOf(postings);
 
                 validatePostings(postings);
+                validateInitialGrantAmount(postings);
 
                 Map<UUID, LedgerAccount> accounts = new HashMap<>();
 
@@ -50,6 +53,7 @@ public class LedgerService {
                 }
 
                 validateInitialGrant(postings, accounts);
+                validateInitialGrantNotPerformed(postings, accounts);
 
                 LedgerTransaction transaction = transactionRepository.save(
                                 LedgerTransaction.initialGrant(
@@ -124,6 +128,48 @@ public class LedgerService {
                         if (!validDebit && !validCredit) {
                                 throw new IllegalArgumentException(
                                                 "Invalid initial grant posting");
+                        }
+                }
+        }
+
+        private void validateInitialGrantAmount(
+                        List<LedgerPostingLine> postings) {
+
+                for (LedgerPostingLine posting : postings) {
+
+                        long delta = posting.delta();
+
+                        if (delta != INITIAL_GRANT_CREDITS
+                                        && delta != -INITIAL_GRANT_CREDITS) {
+
+                                throw new IllegalArgumentException(
+                                                "Initial grant must be exactly "
+                                                                + INITIAL_GRANT_CREDITS
+                                                                + " credits");
+                        }
+                }
+        }
+
+        private void validateInitialGrantNotPerformed(
+                        List<LedgerPostingLine> postings,
+                        Map<UUID, LedgerAccount> accounts) {
+
+                for (LedgerPostingLine posting : postings) {
+
+                        LedgerAccount account = accounts.get(posting.accountId());
+
+                        if (account.getType() != LedgerAccountType.USER_AVAILABLE) {
+                                continue;
+                        }
+
+                        boolean alreadyGranted = entryRepository
+                                        .existsByAccount_IdAndTransaction_Kind(
+                                                        account.getId(),
+                                                        LedgerTransactionKind.INITIAL_GRANT);
+
+                        if (alreadyGranted) {
+                                throw new InitialGrantAlreadyPerformedException(
+                                                account.getId());
                         }
                 }
         }
