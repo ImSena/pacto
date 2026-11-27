@@ -33,16 +33,16 @@ erDiagram
 
 A figura é conceitual: uma `LEDGER_ACCOUNT` do tipo `SYSTEM_ISSUANCE` não possui carteira; contas `CHALLENGE_ESCROW` possuem carteira, desafio e participante. A multiplicidade de `Challenge` para usuários é por papel (criador/destinatário), não significa que cada desafio tenha participantes arbitrários.
 
-| Entidade | Campos conceituais importantes | Responsabilidade e cardinalidade |
-|---|---|---|
-| **User** | `id`, `display_name` | Duas identidades fixas; cada uma possui 1 `Wallet`. |
-| **Wallet** | `id`, `user_id` único | Agregador lógico da carteira; **não** duplica saldo em campo próprio. |
-| **LedgerAccount** | `id`, `type`, `wallet_id?`, `challenge_id?`, `balance` | `USER_AVAILABLE`: uma por wallet; `CHALLENGE_ESCROW`: uma por (challenge, participante); `SYSTEM_ISSUANCE`: conta de contrapartida sem wallet. O `balance` é saldo materializado reconciliável com o ledger. |
-| **LedgerTransaction** | `id`, `kind`, `challenge_id?`, `created_at`, `business_operation_id` | Agrupa atomicamente lançamentos balanceados; `kind` pode ser `INITIAL_GRANT`, `RESERVE`, `SETTLE`. Operação de negócio identificável e única. |
-| **LedgerEntry** | `id`, `transaction_id`, `account_id`, `delta`, `created_at` | Lançamento imutável; `delta` positivo credita e negativo debita. Soma por `LedgerTransaction` = 0. |
-| **Challenge** | `id`, `creator_id`, `invitee_id`, `stake_per_participant`, `status`, `created_at`, `accepted_at?`, `settled_at?`, `version?` | Dois participantes diferentes; contribuição fixa depois de criado; controla transições e referências para custódia. |
-| **Confirmation** | `id`, `challenge_id`, `participant_id`, `winner_id`, `created_at` | Um voto definitivo por (desafio, participante), com vencedor obrigatoriamente entre os dois participantes. |
-| **IdempotencyRecord** | `id`, `actor_id`, `operation`, `key`, `payload_hash`, `state`, `http_status?`, `response_body?`, `created_at`, `completed_at?` | Unicidade por (actor, operation, key); persiste resposta final e coordena retries. Independente de existir efeito financeiro. |
+| Entidade              | Campos conceituais importantes                                                                                                 | Responsabilidade e cardinalidade                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **User**              | `id`, `display_name`                                                                                                           | Duas identidades fixas; cada uma possui 1 `Wallet`.                                                                                                                                                          |
+| **Wallet**            | `id`, `user_id` único                                                                                                          | Agregador lógico da carteira; **não** duplica saldo em campo próprio.                                                                                                                                        |
+| **LedgerAccount**     | `id`, `type`, `wallet_id?`, `challenge_id?`, `balance`                                                                         | `USER_AVAILABLE`: uma por wallet; `CHALLENGE_ESCROW`: uma por (challenge, participante); `SYSTEM_ISSUANCE`: conta de contrapartida sem wallet. O `balance` é saldo materializado reconciliável com o ledger. |
+| **LedgerTransaction** | `id`, `kind`, `challenge_id?`, `created_at`, `business_operation_id`                                                           | Agrupa atomicamente lançamentos balanceados; `kind` pode ser `INITIAL_GRANT`, `RESERVE`, `SETTLE`. Operação de negócio identificável e única.                                                                |
+| **LedgerEntry**       | `id`, `transaction_id`, `account_id`, `delta`, `created_at`                                                                    | Lançamento imutável; `delta` positivo credita e negativo debita. Soma por `LedgerTransaction` = 0.                                                                                                           |
+| **Challenge**         | `id`, `creator_id`, `invitee_id`, `stake_per_participant`, `status`, `created_at`, `accepted_at?`, `settled_at?`, `version?`   | Dois participantes diferentes; contribuição fixa depois de criado; controla transições e referências para custódia.                                                                                          |
+| **Confirmation**      | `id`, `challenge_id`, `participant_id`, `winner_id`, `created_at`                                                              | Um voto definitivo por (desafio, participante), com vencedor obrigatoriamente entre os dois participantes.                                                                                                   |
+| **IdempotencyRecord** | `id`, `actor_id`, `operation`, `key`, `payload_hash`, `state`, `http_status?`, `response_body?`, `created_at`, `completed_at?` | Unicidade por (actor, operation, key); persiste resposta final e coordena retries. Independente de existir efeito financeiro.                                                                                |
 
 ### 2.1 Escolha recomendada: custódia separada por desafio **e participante**
 
@@ -56,14 +56,14 @@ Para o desafio D1 entre A e B, criar duas contas de custódia: `ESCROW(D1,A)` e 
 
 Cada linha abaixo representa **uma** `LedgerTransaction` contendo todos os lançamentos indicados. A soma dos deltas deve ser zero.
 
-| Momento | Lançamentos de uma transação | Resultado |
-|---|---|---|
-| Carga A | `ISSUANCE -100`, `AVAILABLE(A) +100` | A com 100 disponíveis. |
-| Carga B | `ISSUANCE -100`, `AVAILABLE(B) +100` | B com 100 disponíveis. |
-| Aceite de D1 (20) | `AVAILABLE(A) -20`; `ESCROW(D1,A) +20`; `AVAILABLE(B) -20`; `ESCROW(D1,B) +20` | A=80, B=80 disponíveis, 20 reservados por participante. |
-| A vence D1, ambos concordam | `ESCROW(D1,A) -20`; `ESCROW(D1,B) -20`; `AVAILABLE(A) +40` | A=120, B=80; custódia D1 zerada. |
-| Divergência em D1 | Nenhum lançamento adicional | A=80, B=80 disponíveis; 40 em custódia. |
-| Cancelar D1 ainda `OPEN` | Nenhum lançamento | Apenas estado `CANCELLED`; saldos inalterados. |
+| Momento                     | Lançamentos de uma transação                                                   | Resultado                                               |
+| --------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Carga A                     | `ISSUANCE -100`, `AVAILABLE(A) +100`                                           | A com 100 disponíveis.                                  |
+| Carga B                     | `ISSUANCE -100`, `AVAILABLE(B) +100`                                           | B com 100 disponíveis.                                  |
+| Aceite de D1 (20)           | `AVAILABLE(A) -20`; `ESCROW(D1,A) +20`; `AVAILABLE(B) -20`; `ESCROW(D1,B) +20` | A=80, B=80 disponíveis, 20 reservados por participante. |
+| A vence D1, ambos concordam | `ESCROW(D1,A) -20`; `ESCROW(D1,B) -20`; `AVAILABLE(A) +40`                     | A=120, B=80; custódia D1 zerada.                        |
+| Divergência em D1           | Nenhum lançamento adicional                                                    | A=80, B=80 disponíveis; 40 em custódia.                 |
+| Cancelar D1 ainda `OPEN`    | Nenhum lançamento                                                              | Apenas estado `CANCELLED`; saldos inalterados.          |
 
 **Emissão inicial:** `SYSTEM_ISSUANCE` é conta especial de contrapartida, que pode apresentar saldo negativo; não é carteira de usuário. Todas as demais contas de créditos ficam não negativas. Esta exceção evita crédito fictício sem origem contábil.
 
@@ -77,14 +77,14 @@ AWAITING_RESULT --[2ª confirmação igual]--> SETTLED + liquidação única
 AWAITING_RESULT --[2ª confirmação diferente]--> DISPUTED + custódia mantida
 ```
 
-| Comando | Pré-condições | Escritas atômicas | Pós-condição |
-|---|---|---|---|
-| Criar | Ator é um dos dois, destinatário é o outro, stake > 0 | `Challenge(OPEN)` e resultado idempotente | Sem lançamentos de créditos. |
-| Cancelar | Ator = criador e estado `OPEN` | Estado `CANCELLED` e resultado idempotente | Nenhum crédito movido. |
-| Aceitar | Ator = destinatário, estado `OPEN`, ambos têm saldo suficiente | Duas contas de custódia, 1 transação/4 lançamentos, projeções de saldo, estado `ACCEPTED`, resultado idempotente | Duas reservas, uma para cada participante, ou zero. |
-| Primeira confirmação | Ator participa, ainda não confirmou, estado `ACCEPTED` | 1 `Confirmation`, estado `AWAITING_RESULT`, resultado idempotente | Sem lançar créditos. |
-| Segunda confirmação igual | Ator participa, ainda não confirmou, estado `AWAITING_RESULT` | 1 `Confirmation`, 1 transação/3 lançamentos, saldos, estado `SETTLED`, resultado idempotente | Custódias zeradas, prêmio creditado uma única vez. |
-| Segunda confirmação diferente | Mesmas condições da segunda confirmação | 1 `Confirmation`, estado `DISPUTED`, resultado idempotente | Custódias mantidas; sem liquidação. |
+| Comando                       | Pré-condições                                                  | Escritas atômicas                                                                                                | Pós-condição                                        |
+| ----------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Criar                         | Ator é um dos dois, destinatário é o outro, stake > 0          | `Challenge(OPEN)` e resultado idempotente                                                                        | Sem lançamentos de créditos.                        |
+| Cancelar                      | Ator = criador e estado `OPEN`                                 | Estado `CANCELLED` e resultado idempotente                                                                       | Nenhum crédito movido.                              |
+| Aceitar                       | Ator = destinatário, estado `OPEN`, ambos têm saldo suficiente | Duas contas de custódia, 1 transação/4 lançamentos, projeções de saldo, estado `ACCEPTED`, resultado idempotente | Duas reservas, uma para cada participante, ou zero. |
+| Primeira confirmação          | Ator participa, ainda não confirmou, estado `ACCEPTED`         | 1 `Confirmation`, estado `AWAITING_RESULT`, resultado idempotente                                                | Sem lançar créditos.                                |
+| Segunda confirmação igual     | Ator participa, ainda não confirmou, estado `AWAITING_RESULT`  | 1 `Confirmation`, 1 transação/3 lançamentos, saldos, estado `SETTLED`, resultado idempotente                     | Custódias zeradas, prêmio creditado uma única vez.  |
+| Segunda confirmação diferente | Mesmas condições da segunda confirmação                        | 1 `Confirmation`, estado `DISPUTED`, resultado idempotente                                                       | Custódias mantidas; sem liquidação.                 |
 
 Qualquer transição fora da tabela deve ser rejeitada sem modificar saldos. Confirmação com mesma chave/payload pode retornar a resposta anterior; uma nova tentativa de confirmar com outra chave, após já confirmado, deve ser rejeitada como operação de negócio inválida.
 
@@ -115,24 +115,24 @@ Qualquer transição fora da tabela deve ser rejeitada sem modificar saldos. Con
 
 ## 7. Módulos do monólito
 
-| Módulo | Dono das regras | Interface conceitual com os demais |
-|---|---|---|
-| `challenge` | Criação, aceite, estados, confirmações e resultado | Solicita movimentações atômicas a `wallet`; publica resultado do comando ao controle de idempotência. |
-| `wallet` | Contas, saldos, custódias, ledger e invariantes financeiros | Opera reservas/liquidações dentro da transação do comando, sem aceitar débitos desconectados do ledger. |
-| `idempotency` | Normalização/hash, chave única, replay de resposta, retries | Envolve comandos mutáveis; resultado persistido na mesma unidade transacional do efeito. |
-| `demo` (suporte) | Identidades fixas e carga inicial | Não realiza autenticação; só fornece usuários predefinidos ao MVP. |
+| Módulo           | Dono das regras                                             | Interface conceitual com os demais                                                                      |
+| ---------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `challenge`      | Criação, aceite, estados, confirmações e resultado          | Solicita movimentações atômicas a `wallet`; publica resultado do comando ao controle de idempotência.   |
+| `wallet`         | Contas, saldos, custódias, ledger e invariantes financeiros | Opera reservas/liquidações dentro da transação do comando, sem aceitar débitos desconectados do ledger. |
+| `idempotency`    | Normalização/hash, chave única, replay de resposta, retries | Envolve comandos mutáveis; resultado persistido na mesma unidade transacional do efeito.                |
+| `demo` (suporte) | Identidades fixas e carga inicial                           | Não realiza autenticação; só fornece usuários predefinidos ao MVP.                                      |
 
 O `challenge` coordena a transação de aceite/resultado; os módulos compartilham a mesma base PostgreSQL e o mesmo commit — **não** são microserviços.
 
 ## 8. Trade-offs e decisões arquiteturais aprovadas
 
-| ID | Alternativas | Recomendação | Consequência |
-|---|---|---|---|
-| **ADR-P002-01 — Custódia** | 1 conta por desafio **vs.** 1 por desafio e participante | **1 por desafio e participante** | Mais contas; rastreabilidade de quem reservou e consulta de saldo reservado mais simples. |
-| **ADR-P002-02 — Saldo** | Somar todo o ledger em cada leitura **vs.** saldo materializado | **Saldo materializado em `LedgerAccount`**, reconciliável | Leitura e lock eficientes; exige atualizar saldo e lançamentos no mesmo commit. |
-| **ADR-P002-03 — Ledger** | Histórico mutável de operações **vs.** lançamentos imutáveis balanceados | **Lançamentos imutáveis e soma zero** | Melhor auditoria e prova de integridade; modelo ligeiramente maior. |
-| **ADR-P002-04 — Concorrência** | Lock otimista com versão e retry **vs.** lock pessimista de linhas | **Lock pessimista com ordem estável** | Mais fácil demonstrar serialização no MVP; risco de bloqueio/deadlock deve ser testado. |
-| **ADR-P002-05 — Resultado idempotente** | Guardar apenas chave **vs.** chave+hash+status+resposta | **Chave+hash+resultado atômico** | Replays fiéis após reinício; tratamento de operações em andamento precisa de contrato. |
+| ID                                      | Alternativas                                                             | Recomendação                                              | Consequência                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **ADR-P002-01 — Custódia**              | 1 conta por desafio **vs.** 1 por desafio e participante                 | **1 por desafio e participante**                          | Mais contas; rastreabilidade de quem reservou e consulta de saldo reservado mais simples. |
+| **ADR-P002-02 — Saldo**                 | Somar todo o ledger em cada leitura **vs.** saldo materializado          | **Saldo materializado em `LedgerAccount`**, reconciliável | Leitura e lock eficientes; exige atualizar saldo e lançamentos no mesmo commit.           |
+| **ADR-P002-03 — Ledger**                | Histórico mutável de operações **vs.** lançamentos imutáveis balanceados | **Lançamentos imutáveis e soma zero**                     | Melhor auditoria e prova de integridade; modelo ligeiramente maior.                       |
+| **ADR-P002-04 — Concorrência**          | Lock otimista com versão e retry **vs.** lock pessimista de linhas       | **Lock pessimista com ordem estável**                     | Mais fácil demonstrar serialização no MVP; risco de bloqueio/deadlock deve ser testado.   |
+| **ADR-P002-05 — Resultado idempotente** | Guardar apenas chave **vs.** chave+hash+status+resposta                  | **Chave+hash+resultado atômico**                          | Replays fiéis após reinício; tratamento de operações em andamento precisa de contrato.    |
 
 **Status de todas as ADRs:** `APROVADO` em 23/11/2026 por confirmação formal do responsável pelo projeto. As seis decisões de negócio do PCT-001 permanecem `APROVADAS` e não foram reabertas. A aprovação estabelece a linha de base do desenho, não comprova ainda o comportamento de código ou migrations.
 
@@ -147,13 +147,13 @@ O `challenge` coordena a transação de aceite/resultado; os módulos compartilh
 
 ### Evidências da revisão
 
-| Critério | Evidência documental |
-|---|---|
-| Entidades e cardinalidades | Seção 2: diagrama ER e tabela das oito entidades. |
-| Custódia e ledger | Seções 2.1–3: contas por participante; deltas balanceados para carga, reserva e liquidação. |
-| Máquina de estados | Seção 4: transições e pré/pós-condições de cada comando. |
-| Concorrência e idempotência | Seções 5–6: unicidade, locks ordenados, transações e tratamento de retries. |
-| Aprovação arquitetural | Seção 8: ADR-P002-01 a ADR-P002-05 formalmente aprovadas em 23/11/2026. |
+| Critério                    | Evidência documental                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| Entidades e cardinalidades  | Seção 2: diagrama ER e tabela das oito entidades.                                           |
+| Custódia e ledger           | Seções 2.1–3: contas por participante; deltas balanceados para carga, reserva e liquidação. |
+| Máquina de estados          | Seção 4: transições e pré/pós-condições de cada comando.                                    |
+| Concorrência e idempotência | Seções 5–6: unicidade, locks ordenados, transações e tratamento de retries.                 |
+| Aprovação arquitetural      | Seção 8: ADR-P002-01 a ADR-P002-05 formalmente aprovadas em 23/11/2026.                     |
 
 **Status final: PCT-002 — DONE (modelagem aprovada em 23/11/2026).** Nenhum código, migration, endpoint ou teste executável foi criado neste ticket. A validação empírica das garantias de concorrência, idempotência e integridade ocorrerá nos tickets de implementação e teste.
 
@@ -166,3 +166,26 @@ O `challenge` coordena a transação de aceite/resultado; os módulos compartilh
 
 **Critérios de aceite planejados:** backend inicializa e apresenta uma verificação básica de saúde; frontend Vite inicializa e abre no navegador; ambos podem ser executados usando instruções reproduzíveis no README; estrutura de diretórios e arquivos de configuração fica versionável sem credenciais. O banco e as migrations são responsabilidade do PCT-004.
 
+## PCT-011 — Challenge Domain Implementation
+
+The challenge module implements the approved state machine.
+
+Implementation decisions:
+
+- Participants are referenced by UUID.
+- PostgreSQL foreign keys preserve referential integrity.
+- ChallengeStatus defines allowed state transitions.
+- Challenge encapsulates its state changes.
+- Domain mutation methods use package-private visibility.
+- Status is persisted using EnumType.STRING.
+- JPA versioning provides additional protection
+  against stale entity updates.
+- Domain-specific exceptions identify invalid
+  transitions, actors and winners.
+
+Pessimistic locking remains the primary concurrency
+strategy defined by ADR-P002-04.
+
+Financial operations and challenge persistence
+will be coordinated by the application service
+in subsequent tickets.

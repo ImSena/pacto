@@ -20,14 +20,14 @@ service unit tests and PostgreSQL integration tests.
 
 ## Test suites
 
-| Test class | Type | Tests |
-|---|---|---:|
-| LedgerAccountTest | Unit | 9 |
-| LedgerPostingLineTest | Unit | 4 |
-| LedgerServiceTest | Unit | 10 |
-| LedgerIntegrationTest | Integration | 6 |
-| LedgerRollbackTest | Integration | 1 |
-| Total | | 30 |
+| Test class            | Type        | Tests |
+| --------------------- | ----------- | ----: |
+| LedgerAccountTest     | Unit        |     9 |
+| LedgerPostingLineTest | Unit        |     4 |
+| LedgerServiceTest     | Unit        |    10 |
+| LedgerIntegrationTest | Integration |     6 |
+| LedgerRollbackTest    | Integration |     1 |
+| Total                 |             |    30 |
 
 ## Domain unit tests
 
@@ -151,3 +151,28 @@ PCT-010 financial test execution:
 
 These limitations are addressed according to the
 project roadmap or evaluated as future hardening.
+
+## Challenge domain tests
+
+ChallengeStatusTest validates:
+
+- All 36 state transition combinations.
+- The five allowed state transitions.
+- Rejection of the 31 invalid transitions.
+- Terminal state identification.
+
+ChallengeTest validates:
+
+- Challenge creation and initial state.
+- Participant and stake validation.
+- Acceptance and cancellation rules.
+- First and second result confirmations.
+- Winner validation.
+- Duplicate confirmation rejection.
+- Settlement and dispute state transitions.
+- State preservation after invalid operations.
+
+These tests run without Spring, PostgreSQL or Docker.
+
+Financial reservation, confirmation persistence and
+settlement atomicity are not covered by these tests.
