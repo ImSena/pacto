@@ -43,6 +43,17 @@ public class LedgerAccount {
         this.createdAt = Instant.now();
     }
 
+    private LedgerAccount(
+            LedgerAccountType type,
+            UUID walletId,
+            UUID challengeId) {
+        this.type = Objects.requireNonNull(type);
+        this.walletId = walletId;
+        this.challengeId = challengeId;
+        this.balance = 0L;
+        this.createdAt = Instant.now();
+    }
+
     public static LedgerAccount available(UUID walletId) {
 
         Objects.requireNonNull(
@@ -58,6 +69,18 @@ public class LedgerAccount {
         return new LedgerAccount(
                 LedgerAccountType.SYSTEM_ISSUANCE,
                 null);
+    }
+
+    static LedgerAccount escrow(
+            UUID walletId,
+            UUID challengeId) {
+        Objects.requireNonNull(walletId, "Wallet ID is required");
+        Objects.requireNonNull(challengeId, "Challenge ID is required");
+
+        return new LedgerAccount(
+                LedgerAccountType.CHALLENGE_ESCROW,
+                walletId,
+                challengeId);
     }
 
     public UUID getId() {

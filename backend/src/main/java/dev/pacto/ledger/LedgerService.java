@@ -1,14 +1,22 @@
 package dev.pacto.ledger;
 
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import dev.pacto.ledger.repository.LedgerAccountRepository;
 import dev.pacto.ledger.repository.LedgerEntryRepository;
 import dev.pacto.ledger.repository.LedgerTransactionRepository;
-
-import java.math.BigInteger;
-import java.util.*;
 
 @Service
 public class LedgerService {
@@ -55,28 +63,102 @@ public class LedgerService {
                 validateInitialGrant(postings, accounts);
                 validateInitialGrantNotPerformed(postings, accounts);
 
-                LedgerTransaction transaction = transactionRepository.save(
-                                LedgerTransaction.initialGrant(
-                                                businessOperationId));
+                return persistPostings(
+                                LedgerTransaction.initialGrant(businessOperationId),
+                                postings,
+                                accounts);
+        }
+
+        @Transactional(propagation = Propagation.MANDATORY)
+        public UUID reserve(
+                        UUID businessOperationId,
+                        UUID challengeId,
+                        UUID creatorWalletId,
+                        UUID inviteeWalletId,
+                        long stake) {
+                Objects.requireNonNull(businessOperationId);
+                Objects.requireNonNull(challengeId);
+                Objects.requireNonNull(creatorWalletId);
+                Objects.requireNonNull(inviteeWalletId);
+
+                if (stake <= 0) {
+                        throw new IllegalArgumentException(
+                                        "Stake must be positive");
+                }
+
+                if (creatorWalletId.equals(inviteeWalletId)) {
+                        throw new IllegalArgumentException(
+                                        "Reservation requires two different wallets");
+                }
+
+                LedgerAccount creatorAvailable = findAvailableAccount(creatorWalletId);
+
+                LedgerAccount inviteeAvailable = findAvailableAccount(inviteeWalletId);
+
+                validateAvailableBalance(creatorAvailable, stake);
+                validateAvailableBalance(inviteeAvailable, stake);
+
+                LedgerAccount creatorEscrow = accountRepository.save(
+                                LedgerAccount.escrow(
+                                                creatorWalletId,
+                                                challengeId));
+
+                LedgerAccount inviteeEscrow = accountRepository.save(
+                                LedgerAccount.escrow(
+                                                inviteeWalletId,
+                                                challengeId));
+
+                List<LedgerPostingLine> postings = List.of(
+                                new LedgerPostingLine(
+                                                creatorAvailable.getId(), -stake),
+                                new LedgerPostingLine(
+                                                creatorEscrow.getId(), stake),
+                                new LedgerPostingLine(
+                                                inviteeAvailable.getId(), -stake),
+                                new LedgerPostingLine(
+                                                inviteeEscrow.getId(), stake));
+
+                validatePostings(postings);
+
+                Map<UUID, LedgerAccount> accounts = Map.of(
+                                creatorAvailable.getId(), creatorAvailable,
+                                creatorEscrow.getId(), creatorEscrow,
+                                inviteeAvailable.getId(), inviteeAvailable,
+                                inviteeEscrow.getId(), inviteeEscrow);
+
+                return persistPostings(
+                                LedgerTransaction.reserve(
+                                                businessOperationId,
+                                                challengeId),
+                                postings,
+                                accounts);
+        }
+
+        private UUID persistPostings(
+                        LedgerTransaction transaction,
+                        List<LedgerPostingLine> postings,
+                        Map<UUID, LedgerAccount> accounts) {
+                LedgerTransaction savedTransaction = transactionRepository.save(transaction);
 
                 List<LedgerEntry> entries = new ArrayList<>();
 
                 for (LedgerPostingLine posting : postings) {
-
-                        LedgerAccount account = accounts.get(posting.accountId());
+                        LedgerAccount account = accounts.get(
+                                        posting.accountId());
 
                         account.applyDelta(posting.delta());
 
-                        entries.add(
-                                        new LedgerEntry(
-                                                        transaction,
-                                                        account,
-                                                        posting.delta()));
+                        LedgerEntry entry = new LedgerEntry(
+                                        savedTransaction,
+                                        account,
+                                        posting.delta());
+
+                        entries.add(entry);
                 }
 
                 entryRepository.saveAll(entries);
 
-                return transaction.getId();
+                return savedTransaction.getId();
         }
 
         private void validatePostings(
@@ -171,6 +253,27 @@ public class LedgerService {
                                 throw new InitialGrantAlreadyPerformedException(
                                                 account.getId());
                         }
+                }
+        }
+
+        private LedgerAccount findAvailableAccount(UUID walletId) {
+                return accountRepository
+                                .findByWalletIdAndType(
+                                                walletId,
+                                                LedgerAccountType.USER_AVAILABLE)
+                                .orElseThrow(() -> new IllegalStateException(
+                                                "Available ledger account not found for wallet: "
+                                                                + walletId));
+        }
+
+        private void validateAvailableBalance(
+                        LedgerAccount account,
+                        long amount) {
+                if (account.getBalance() < amount) {
+                        throw new InsufficientBalanceException(
+                                        account.getId(),
+                                        account.getBalance(),
+                                        -amount);
                 }
         }
 }

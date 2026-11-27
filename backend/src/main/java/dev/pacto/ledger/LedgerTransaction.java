@@ -1,10 +1,17 @@
 package dev.pacto.ledger;
 
-import jakarta.persistence.*;
-
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "ledger_transactions")
@@ -52,6 +59,23 @@ public class LedgerTransaction {
                 businessOperationId,
                 LedgerTransactionKind.INITIAL_GRANT,
                 null);
+    }
+
+    static LedgerTransaction reserve(
+            UUID businessOperationId,
+            UUID challengeId) {
+        Objects.requireNonNull(
+                businessOperationId,
+                "Business operation ID is required");
+
+        Objects.requireNonNull(
+                challengeId,
+                "Challenge ID is required");
+
+        return new LedgerTransaction(
+                businessOperationId,
+                LedgerTransactionKind.RESERVE,
+                challengeId);
     }
 
     public UUID getId() {
