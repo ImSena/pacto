@@ -5,7 +5,9 @@ import dev.pacto.ledger.LedgerService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -737,6 +741,190 @@ class ChallengeResolutionIntegrationTest {
 
         assertBalances(80L, 80L, 20L, 20L);
 
+        assertLedgerIntegrity();
+    }
+
+    // PCT-014: persisted-state snapshots and transition safeguards.
+    private record FinancialSnapshot(
+            List<Map<String, Object>> accounts,
+            List<Map<String, Object>> transactions,
+            List<Map<String, Object>> entries) {
+    }
+
+    private record PersistedSnapshot(
+            List<Map<String, Object>> challenges,
+            List<Map<String, Object>> confirmations,
+            FinancialSnapshot financial) {
+    }
+
+    private FinancialSnapshot financialSnapshot() {
+        return new FinancialSnapshot(
+                jdbcTemplate.queryForList(
+                        "SELECT * FROM ledger_accounts ORDER BY id"),
+                jdbcTemplate.queryForList(
+                        "SELECT * FROM ledger_transactions ORDER BY id"),
+                jdbcTemplate.queryForList(
+                        "SELECT * FROM ledger_entries ORDER BY id"));
+    }
+
+    private PersistedSnapshot persistedSnapshot() {
+        return new PersistedSnapshot(
+                jdbcTemplate.queryForList(
+                        "SELECT * FROM challenges ORDER BY id"),
+                jdbcTemplate.queryForList(
+                        "SELECT * FROM confirmations ORDER BY id"),
+                financialSnapshot());
+    }
+
+    private void assertRejectedWithoutChanges(
+            Class<? extends RuntimeException> exceptionType,
+            Executable operation) {
+        PersistedSnapshot before = persistedSnapshot();
+
+        assertThrows(exceptionType, operation);
+
+        PersistedSnapshot after = persistedSnapshot();
+
+        assertEquals(
+                before,
+                after,
+                "Rejected operation must not change persisted state");
+
+        assertLedgerIntegrity();
+    }
+
+    private UUID prepareChallenge(ChallengeStatus status) {
+        Challenge challenge = challengeService.create(
+                creatorId,
+                inviteeId,
+                "Transition integration test",
+                "Invalid transition validation",
+                20L);
+
+        UUID challengeId = challenge.getId();
+
+        switch (status) {
+            case OPEN -> {
+                // No additional operation required.
+            }
+
+            case CANCELLED ->
+                    challengeService.cancel(challengeId, creatorId);
+
+            case ACCEPTED ->
+                    challengeService.accept(challengeId, inviteeId);
+
+            case AWAITING_RESULT -> {
+                challengeService.accept(challengeId, inviteeId);
+                challengeService.confirm(challengeId, creatorId, creatorId);
+            }
+
+            case SETTLED -> {
+                challengeService.accept(challengeId, inviteeId);
+                challengeService.confirm(challengeId, creatorId, creatorId);
+                challengeService.confirm(challengeId, inviteeId, creatorId);
+            }
+
+            case DISPUTED -> {
+                challengeService.accept(challengeId, inviteeId);
+                challengeService.confirm(challengeId, creatorId, creatorId);
+                challengeService.confirm(challengeId, inviteeId, inviteeId);
+            }
+        }
+
+        assertEquals(status.name(), persistedStatus(challengeId));
+
+        return challengeId;
+    }
+
+    @Test
+    void shouldCancelOpenChallengeWithoutFinancialEffects() {
+        UUID challengeId = prepareChallenge(ChallengeStatus.OPEN);
+
+        FinancialSnapshot before = financialSnapshot();
+
+        Challenge result = challengeService.cancel(challengeId, creatorId);
+
+        assertEquals(ChallengeStatus.CANCELLED, result.getStatus());
+        assertEquals("CANCELLED", persistedStatus(challengeId));
+        assertNull(result.getAcceptedAt());
+        assertNull(result.getSettledAt());
+        assertEquals(0L, confirmationCount(challengeId));
+        assertEquals(before, financialSnapshot());
+
+        assertBalances(100L, 100L, 0L, 0L);
+        assertLedgerIntegrity();
+    }
+
+    @Test
+    void shouldRejectCancellationByInviteeWithoutChanges() {
+        UUID challengeId = prepareChallenge(ChallengeStatus.OPEN);
+
+        assertRejectedWithoutChanges(
+                InvalidChallengeActorException.class,
+                () -> challengeService.cancel(challengeId, inviteeId));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ChallengeStatus.class,
+            names = {
+                    "ACCEPTED",
+                    "AWAITING_RESULT",
+                    "SETTLED",
+                    "DISPUTED",
+                    "CANCELLED"
+            })
+    void shouldRejectInvalidCancellationWithoutChanges(ChallengeStatus status) {
+        UUID challengeId = prepareChallenge(status);
+
+        assertRejectedWithoutChanges(
+                InvalidChallengeTransitionException.class,
+                () -> challengeService.cancel(challengeId, creatorId));
+    }
+
+    @Test
+    void shouldRejectAcceptanceOfCancelledChallenge() {
+        UUID challengeId = prepareChallenge(ChallengeStatus.CANCELLED);
+
+        assertRejectedWithoutChanges(
+                InvalidChallengeTransitionException.class,
+                () -> challengeService.accept(challengeId, inviteeId));
+
+        assertBalances(100L, 100L, 0L, 0L);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ChallengeStatus.class,
+            names = {"OPEN", "CANCELLED"})
+    void shouldRejectConfirmationBeforeAcceptanceWithoutChanges(ChallengeStatus status) {
+        UUID challengeId = prepareChallenge(status);
+
+        assertRejectedWithoutChanges(
+                InvalidChallengeTransitionException.class,
+                () -> challengeService.confirm(challengeId, creatorId, creatorId));
+
+        assertEquals(0L, confirmationCount(challengeId));
+    }
+
+    @Test
+    void shouldRejectAdditionalConfirmationsAfterDispute() {
+        UUID challengeId = prepareChallenge(ChallengeStatus.DISPUTED);
+
+        assertRejectedWithoutChanges(
+                DuplicateConfirmationException.class,
+                () -> challengeService.confirm(challengeId, creatorId, inviteeId));
+
+        assertRejectedWithoutChanges(
+                DuplicateConfirmationException.class,
+                () -> challengeService.confirm(challengeId, inviteeId, creatorId));
+
+        assertEquals("DISPUTED", persistedStatus(challengeId));
+        assertEquals(2L, confirmationCount(challengeId));
+        assertEquals(0L, settlementCount(challengeId));
+
+        assertBalances(80L, 80L, 20L, 20L);
         assertLedgerIntegrity();
     }
 }

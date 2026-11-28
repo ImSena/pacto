@@ -204,3 +204,27 @@ The intentional commit failure uses a test-only
 deferred PostgreSQL constraint trigger.
 
 No production migrations are modified.
+
+## Challenge cancellation and state protection
+
+The test suite validates:
+
+- Cancellation restricted to the challenge creator.
+- Cancellation restricted to OPEN challenges.
+- All 36 possible state transition combinations.
+- All six state classifications.
+- Terminal state protection.
+- Rejection of invalid operations without financial effects.
+- Persistence snapshots before and after rejected operations.
+- Ledger reconciliation and credit conservation.
+
+Rejected operations must preserve:
+
+- Challenge state and timestamps.
+- Existing confirmations.
+- Ledger accounts and balances.
+- Ledger transactions.
+- Ledger entries.
+
+Concurrency and persistent idempotency are
+covered by subsequent implementation tickets.

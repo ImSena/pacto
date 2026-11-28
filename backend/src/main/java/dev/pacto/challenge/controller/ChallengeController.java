@@ -93,6 +93,18 @@ public class ChallengeController {
                                 ChallengeResponse.from(challenge));
         }
 
+        @PostMapping("/{challengeId}/cancel")
+        public ResponseEntity<ChallengeResponse> cancel(
+                        @PathVariable UUID challengeId,
+                        @RequestHeader("X-Actor-Id") UUID actorId) {
+                Challenge challenge = challengeService.cancel(
+                                challengeId,
+                                actorId);
+
+                return ResponseEntity.ok(
+                                ChallengeResponse.from(challenge));
+        }
+
         private void validateCreateRequest(
                         UUID actorId,
                         CreateChallengeRequest request) {

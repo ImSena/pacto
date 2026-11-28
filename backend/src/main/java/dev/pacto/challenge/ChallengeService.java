@@ -83,6 +83,17 @@ public class ChallengeService {
         }
 
         @Transactional
+        public Challenge cancel(
+                        UUID challengeId,
+                        UUID actorId) {
+                Challenge challenge = findChallenge(challengeId);
+
+                challenge.cancel(actorId);
+
+                return challenge;
+        }
+
+        @Transactional
         public Challenge confirm(
                         UUID challengeId,
                         UUID actorId,

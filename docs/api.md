@@ -137,3 +137,32 @@ database transaction.
 
 If settlement fails, all changes from the second
 confirmation are rolled back.
+
+### Cancel challenge
+
+POST /api/challenges/{challengeId}/cancel
+
+Required headers:
+
+- X-Actor-Id: creator UUID.
+
+No request body is required.
+
+Success: 200 OK.
+
+The challenge status changes from OPEN to CANCELLED.
+
+#### Business rules
+
+- Only the challenge creator can cancel it.
+- Only OPEN challenges can be cancelled.
+- Cancellation does not create ledger transactions.
+- Cancellation does not modify wallet balances.
+- CANCELLED is a terminal state.
+
+#### Errors
+
+- 400: Missing or invalid UUID.
+- 403: Actor is not the challenge creator.
+- 404: Challenge not found.
+- 409: Invalid challenge state transition.
