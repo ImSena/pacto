@@ -1,20 +1,24 @@
 package dev.pacto.challenge;
 
-import dev.pacto.challenge.controller.ChallengeController;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.UUID;
+import dev.pacto.challenge.controller.ChallengeController;
+import dev.pacto.idempotency.IdempotencyOperation;
+import dev.pacto.idempotency.IdempotencyResponse;
+import dev.pacto.idempotency.IdempotencyService;
+
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -25,6 +29,9 @@ class ChallengeConfirmationControllerTest {
 
     @Mock
     private ChallengeService challengeService;
+
+    @Mock
+    private IdempotencyService idempotencyService;
 
     private MockMvc mockMvc;
 
@@ -56,8 +63,23 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(
-                        new ChallengeController(challengeService))
+                        new ChallengeController(
+                                challengeService,
+                                idempotencyService,
+                                JsonMapper.builder().build()))
                 .build();
+
+        lenient().when(idempotencyService.execute(
+                any(UUID.class),
+                any(IdempotencyOperation.class),
+                anyString(),
+                anyString(),
+                any()))
+                .thenAnswer(invocation -> {
+                    Supplier<IdempotencyResponse> command =
+                            invocation.getArgument(4);
+                    return command.get();
+                });
     }
 
     private String endpoint() {
@@ -87,6 +109,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
@@ -121,6 +144,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", inviteeId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
@@ -155,6 +179,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", inviteeId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(inviteeId)))
@@ -172,18 +197,20 @@ class ChallengeConfirmationControllerTest {
     void shouldRejectMissingWinner() throws Exception {
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(challengeService);
+        verifyNoInteractions(challengeService, idempotencyService);
     }
 
     @Test
     void shouldRejectInvalidWinnerUuid() throws Exception {
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -193,18 +220,19 @@ class ChallengeConfirmationControllerTest {
                                 """))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(challengeService);
+        verifyNoInteractions(challengeService, idempotencyService);
     }
 
     @Test
     void shouldRejectMissingActorHeader() throws Exception {
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(challengeService);
+        verifyNoInteractions(challengeService, idempotencyService);
     }
 
     @Test
@@ -220,6 +248,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", outsiderId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
@@ -240,6 +269,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(invalidWinnerId)))
@@ -260,6 +290,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "new-command-key")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
@@ -278,6 +309,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
@@ -298,6 +330,7 @@ class ChallengeConfirmationControllerTest {
 
         mockMvc.perform(
                 post(endpoint())
+                        .header("Idempotency-Key", "test-key-001")
                         .header("X-Actor-Id", creatorId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request(creatorId)))
