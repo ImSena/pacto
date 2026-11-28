@@ -28,6 +28,14 @@ service unit tests and PostgreSQL integration tests.
 | LedgerIntegrationTest | Integration |     6 |
 | LedgerRollbackTest    | Integration |     1 |
 | Total                 |             |    30 |
+| Test class            | Type        | Tests |
+| --------------------- | ----------- | ----: |
+| LedgerAccountTest     | Unit        |     9 |
+| LedgerPostingLineTest | Unit        |     4 |
+| LedgerServiceTest     | Unit        |    10 |
+| LedgerIntegrationTest | Integration |     6 |
+| LedgerRollbackTest    | Integration |     1 |
+| Total                 |             |    30 |
 
 ## Domain unit tests
 
@@ -176,7 +184,6 @@ These tests run without Spring, PostgreSQL or Docker.
 
 Financial reservation, confirmation persistence and
 settlement atomicity are not covered by these tests.
-
 
 ## Challenge resolution integration tests
 
