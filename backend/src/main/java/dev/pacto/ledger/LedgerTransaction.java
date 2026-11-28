@@ -78,6 +78,23 @@ public class LedgerTransaction {
                 challengeId);
     }
 
+    static LedgerTransaction settle(
+            UUID businessOperationId,
+            UUID challengeId) {
+        Objects.requireNonNull(
+                businessOperationId,
+                "Business operation ID is required");
+
+        Objects.requireNonNull(
+                challengeId,
+                "Challenge ID is required");
+
+        return new LedgerTransaction(
+                businessOperationId,
+                LedgerTransactionKind.SETTLE,
+                challengeId);
+    }
+
     public UUID getId() {
         return id;
     }

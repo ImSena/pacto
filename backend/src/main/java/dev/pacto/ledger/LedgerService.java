@@ -134,6 +134,81 @@ public class LedgerService {
                                 accounts);
         }
 
+        @Transactional(propagation = Propagation.MANDATORY)
+        public UUID settle(
+                        UUID businessOperationId,
+                        UUID challengeId,
+                        UUID creatorWalletId,
+                        UUID inviteeWalletId,
+                        UUID winnerWalletId,
+                        long stake) {
+                Objects.requireNonNull(businessOperationId);
+                Objects.requireNonNull(challengeId);
+                Objects.requireNonNull(creatorWalletId);
+                Objects.requireNonNull(inviteeWalletId);
+                Objects.requireNonNull(winnerWalletId);
+
+                if (stake <= 0) {
+                        throw new IllegalArgumentException(
+                                        "Stake must be positive");
+                }
+
+                if (creatorWalletId.equals(inviteeWalletId)) {
+                        throw new IllegalArgumentException(
+                                        "Settlement requires two different wallets");
+                }
+
+                if (!winnerWalletId.equals(creatorWalletId)
+                                && !winnerWalletId.equals(inviteeWalletId)) {
+                        throw new IllegalArgumentException(
+                                        "Winner must be a challenge participant");
+                }
+
+                long payout = Math.multiplyExact(stake, 2L);
+
+                LedgerAccount creatorEscrow = findEscrowAccount(
+                                challengeId,
+                                creatorWalletId);
+
+                LedgerAccount inviteeEscrow = findEscrowAccount(
+                                challengeId,
+                                inviteeWalletId);
+
+                validateEscrowBalance(creatorEscrow, stake);
+                validateEscrowBalance(inviteeEscrow, stake);
+
+                LedgerAccount winnerAvailable = findAvailableAccount(winnerWalletId);
+
+                Math.addExact(
+                                winnerAvailable.getBalance(),
+                                payout);
+
+                List<LedgerPostingLine> postings = List.of(
+                                new LedgerPostingLine(
+                                                creatorEscrow.getId(),
+                                                -stake),
+                                new LedgerPostingLine(
+                                                inviteeEscrow.getId(),
+                                                -stake),
+                                new LedgerPostingLine(
+                                                winnerAvailable.getId(),
+                                                payout));
+
+                validatePostings(postings);
+
+                Map<UUID, LedgerAccount> accounts = Map.of(
+                                creatorEscrow.getId(), creatorEscrow,
+                                inviteeEscrow.getId(), inviteeEscrow,
+                                winnerAvailable.getId(), winnerAvailable);
+
+                return persistPostings(
+                                LedgerTransaction.settle(
+                                                businessOperationId,
+                                                challengeId),
+                                postings,
+                                accounts);
+        }
+
         private UUID persistPostings(
                         LedgerTransaction transaction,
                         List<LedgerPostingLine> postings,
@@ -274,6 +349,35 @@ public class LedgerService {
                                         account.getId(),
                                         account.getBalance(),
                                         -amount);
+                }
+        }
+
+        private LedgerAccount findEscrowAccount(
+                        UUID challengeId,
+                        UUID walletId) {
+                return accountRepository
+                                .findByChallengeIdAndWalletIdAndType(
+                                                challengeId,
+                                                walletId,
+                                                LedgerAccountType.CHALLENGE_ESCROW)
+                                .orElseThrow(() -> new IllegalStateException(
+                                                "Escrow account not found for challenge: "
+                                                                + challengeId
+                                                                + " and wallet: "
+                                                                + walletId));
+        }
+
+        private void validateEscrowBalance(
+                        LedgerAccount escrow,
+                        long expectedBalance) {
+                if (escrow.getBalance() != expectedBalance) {
+                        throw new IllegalStateException(
+                                        "Invalid escrow balance for account: "
+                                                        + escrow.getId()
+                                                        + ". Expected: "
+                                                        + expectedBalance
+                                                        + ", actual: "
+                                                        + escrow.getBalance());
                 }
         }
 }

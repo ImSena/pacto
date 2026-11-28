@@ -42,4 +42,9 @@ public interface LedgerAccountRepository
 
                 Long getTotal();
         }
+
+        Optional<LedgerAccount> findByChallengeIdAndWalletIdAndType(
+                        UUID challengeId,
+                        UUID walletId,
+                        LedgerAccountType type);
 }

@@ -176,3 +176,24 @@ These tests run without Spring, PostgreSQL or Docker.
 
 Financial reservation, confirmation persistence and
 settlement atomicity are not covered by these tests.
+
+
+## Challenge resolution integration tests
+
+ChallengeResolutionIntegrationTest validates:
+
+- First confirmation without financial effects.
+- Settlement for either participant.
+- Escrow preservation during disputes.
+- Confirmation immutability.
+- Sequential duplicate settlement prevention.
+- Escrow isolation between challenges.
+- Full rollback after an intentional commit failure.
+- Successful retry after rollback.
+- Mandatory transaction propagation.
+- Ledger reconciliation and credit conservation.
+
+The intentional commit failure uses a test-only
+deferred PostgreSQL constraint trigger.
+
+No production migrations are modified.

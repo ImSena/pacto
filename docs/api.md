@@ -92,3 +92,48 @@ GET /api/users/{userId}/wallet/statement
 These endpoints are intended for demonstration purposes.
 Authentication and authorization are not implemented.
 A user ID is not an authentication credential.
+
+
+### Confirm challenge result
+
+POST /api/challenges/{challengeId}/confirm
+
+Required headers:
+
+- Content-Type: application/json
+- X-Actor-Id: participant UUID
+
+Request fields:
+
+- winnerId: UUID of the declared winner.
+
+Success: 200 OK.
+
+The first confirmation changes the challenge
+status to AWAITING_RESULT.
+
+When both participants declare the same winner,
+the challenge becomes SETTLED and the full escrow
+amount is credited to the winner.
+
+When participants disagree, the challenge becomes
+DISPUTED and all reserved credits remain in escrow.
+
+Each participant can confirm only once.
+Confirmations cannot be modified.
+
+#### Errors
+
+- 400: Missing or invalid winner.
+- 403: Actor is not a challenge participant.
+- 404: Challenge not found.
+- 409: Duplicate confirmation or invalid transition.
+
+#### Transactional guarantees
+
+The second confirmation, challenge state transition
+and financial settlement occur within a single
+database transaction.
+
+If settlement fails, all changes from the second
+confirmation are rolled back.
